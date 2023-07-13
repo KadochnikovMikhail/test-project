@@ -20,7 +20,7 @@ server2.get('/subscribe', (request, reply) => {
     const client = reply.raw;
     clients.push(client);
 
-    client.write('data: Connected\n\n');
+    client.write('data: 123\n\n');
 
     client.on('close', () => {
         clients.splice(clients.indexOf(client), 1);
