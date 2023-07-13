@@ -1,49 +1,75 @@
 import Fastify from 'fastify';
 import axios from 'axios';
-import { Contract } from '../../contract';
+import EventSource from 'eventsource';
+import http from 'http';
+
+interface Contract {
+    message: string;
+}
 
 const server1 = Fastify();
 
 // Секретный ключ
 const SECRET_KEY = 'secret_key';
 
-// Эндпоинт принимающий контракт
-server1.post<{ Body: Contract }>('/contract', async (request, reply) => {
-    const { message } = request.body;
-    const authKey = request.headers['x-auth-key'];
+// Создаем массив подключенных клиентов для SSE
+const clients: http.ServerResponse[] = [];
 
-    // Проверяем, что ключ авторизации совпадает с секретным ключом
-    if (authKey !== SECRET_KEY) {
-        reply.status(401).send({ error: 'Unauthorized' });
-        return;
-    }
+// Эндпоинт для подписки на SSE
+server1.get('/subscribe', (request, reply) => {
+    reply.raw.setHeader('Content-Type', 'text/event-stream');
+    reply.raw.setHeader('Cache-Control', 'no-cache');
+    reply.raw.setHeader('Connection', 'keep-alive');
+    reply.raw.setHeader('Access-Control-Allow-Origin', '*');
+    reply.raw.setHeader('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept');
 
-    if (typeof message === 'string') {
-        return { message };
-    }
-    reply.status(400).send({ error: 'Invalid contract' });
+    const client = reply.raw;
+    clients.push(client);
+
+    // Отправляем сообщение SSE с пустым полем данных для установки соединения
+    client.write('data: 123\n\n');
+
+    // Обработчик закрытия соединения SSE
+    client.on('close', () => {
+        clients.splice(clients.indexOf(client), 1);
+    });
 });
 
-// Эндпоинт отправляющий контракт на сервер 2
-server1.get('/send-contract', async (_, reply) => {
-    try {
-        const contract: Contract = { message: 'Привет, Сервер 2!' };
-        const response = await axios.post('http://localhost:3001/contract', contract, {
-            headers: {
-                'Content-Type': 'application/json',
-                'X-Auth-Key': SECRET_KEY,
-            },
-        });
+// Функция для отправки сообщения через SSE
+const sendSSEMessage = (message: Contract) => {
+    clients.forEach((client) => {
+        client.write(`data: ${JSON.stringify(message)}\n\n`);
+    });
+};
 
-        const data = response.data;
-        reply.send(data);
-    } catch (err) {
-        console.error(err);
-        reply.status(500).send({ error: 'Не удалось отправить контракт' });
-    }
+// Эндпоинт для получения SSE-сообщений от сервера 2
+server1.get('/receive-contract', (request, reply) => {
+    const es = new EventSource('http://localhost:3001/subscribe');
+
+    es.onmessage = (event) => {
+        const message = JSON.parse(event.data) as Contract;
+        console.log('Received message from Server 2:', message);
+    };
+
+    es.onerror = (error) => {
+        console.error('Error occurred:', error);
+    };
+
+    reply.send({ message: 'Subscribed to Server 2 SSE' });
 });
 
-// Запускаем сервер
+// Эндпоинт для отправки контракта на сервер 2
+server1.post('/send-contract', (request, reply) => {
+    const contract = request.body as Contract; // Предполагается, что контракт будет отправлен в теле запроса
+
+    // Отправить контракт на сервер 2 через SSE сообщение
+    sendSSEMessage(contract);
+
+    reply.send({ message: 'Contract sent to Server 2' });
+});
+
+
+// Запускаем сервер 1
 server1.listen(3000, (err, address) => {
     if (err) {
         console.error(err);
