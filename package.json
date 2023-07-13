@@ -1,0 +1,38 @@
+{
+  "name": "test-project",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "lint": "npx eslint ",
+    "build": "tsc -p tsconfig.json",
+    "start:server1": "cd first_server && tsc && node ../dist/first_server/src/index.js",
+    "start:server2": "cd second_server && tsc && node ../dist/second_server/src/index.js"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/KadochnikovMikhail/test-project.git"
+  },
+  "bugs": {
+    "url": "https://github.com/KadochnikovMikhail/test-project/issues"
+  },
+  "homepage": "https://github.com/KadochnikovMikhail/test-project#readme",
+  "devDependencies": {
+    "@types/node": "4.9.5",
+    "@types/uuid": "^9.0.2",
+    "@typescript-eslint/eslint-plugin": "^6.0.0",
+    "@typescript-eslint/parser": "^6.0.0",
+    "eslint": "^8.44.0",
+    "ts-node": "^10.9.1",
+    "typescript": "^5.1.6"
+  },
+  "dependencies": {
+    "axios": "^1.4.0",
+    "fastify": "^4.19.2",
+    "uuid": "^9.0.0"
+  }
+}
