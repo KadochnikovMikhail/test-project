@@ -1,86 +1,53 @@
-import fastify, {FastifyReply, FastifyRequest} from "fastify";
+import Fastify from 'fastify';
+import axios from 'axios';
+import { Contract } from '../../contract';
 
-const server = fastify();
+const server2 = Fastify();
 
-const firstServerUrl = "http://localhost:3001";
+// Секретный ключ
+const SECRET_KEY = 'secret_key';
 
-server.get("/", async (request: FastifyRequest, reply: FastifyReply) => {
-
+// Эндпоинт отправляющий контракт
+server2.get('/send-contract', async (_, reply) => {
     try {
-        const response = await server.inject({
-            method: "GET",
-            url: `${firstServerUrl}/`,
+        const contract: Contract = { message: 'Привет, Сервер 1!' };
+        const response = await axios.post('http://localhost:3000/contract', contract, {
+            headers: {
+                'Content-Type': 'application/json',
+                'X-Auth-Key': SECRET_KEY,
+            },
         });
-        reply.send(response.payload);
+
+        const data = response.data;
+        reply.send(data);
     } catch (err) {
         console.error(err);
-        reply.code(500).send("Error");
+        reply.status(500).send({ error: 'Не удалось отправить контракт' });
     }
 });
 
+server2.post<{ Body: Contract }>('/contract', async (request, reply) => {
+    const { message } = request.body;
+    const authKey = request.headers['x-auth-key'];
 
-server.post("/connect", async (request: FastifyRequest, reply: FastifyReply) => {
-
-    async function connectToFirstServer() {
-        try {
-            const response = await server.inject({
-                method: "POST",
-                url: `${firstServerUrl}/connect`,
-            });
-            const {client_id} = response.json();
-
-
-            reply
-                .header("Access-Control-Allow-Origin", "*")
-                .header("Content-Type", "text/event-stream")
-                .header("Cache-Control", "no-cache")
-                .header("Connection", "keep-alive")
-                .status(200);
-
-
-            const eventSource = new EventSource(`${firstServerUrl}/connect/${client_id}`);
-
-
-            eventSource.onmessage = (event) => {
-                const data = JSON.parse(event.data);
-                reply.send(data);
-            };
-
-
-            eventSource.onerror = () => {
-                eventSource.close();
-                console.log("Connection closed. Reconnecting...");
-
-
-                setTimeout(() => {
-                    connectToFirstServer();
-                }, 5000);
-            };
-
-
-            const timeout = setTimeout(() => {
-                eventSource.close();
-            }, 20000);
-
-
-            reply.raw.on("close", () => {
-                clearTimeout(timeout);
-                eventSource.close();
-            });
-        } catch (err) {
-            console.error(err);
-            reply.code(500).send("Error");
-        }
+    // Проверяем, что ключ авторизации совпадает с секретным ключом
+    if (authKey !== SECRET_KEY) {
+        reply.status(401).send({ error: 'Unauthorized' });
+        return;
     }
 
-    await connectToFirstServer();
-
+    if (typeof message === 'string') {
+        return { message };
+    }
+    reply.status(400).send({ error: 'Invalid contract' });
 });
 
-server.listen(3002, (err) => {
+
+// Запускаем сервер
+server2.listen(3001, (err, address) => {
     if (err) {
         console.error(err);
         process.exit(1);
     }
-    console.log("Second server is running on port 3002");
+    console.log(`Сервер 2 слушает ${address}`);
 });

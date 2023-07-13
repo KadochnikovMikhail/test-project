@@ -1,105 +1,53 @@
-import fastify, { FastifyReply, FastifyRequest } from "fastify";
+import Fastify from 'fastify';
+import axios from 'axios';
+import { Contract } from '../../contract';
 
-const server = fastify();
+const server1 = Fastify();
 
-interface ExtendedFastifyReply extends FastifyReply {
-    res?: any;
-}
+// Секретный ключ
+const SECRET_KEY = 'secret_key';
 
-const clientsAwaitingResponse = new Map<string, ExtendedFastifyReply>();
+// Эндпоинт принимающий контракт
+server1.post<{ Body: Contract }>('/contract', async (request, reply) => {
+    const { message } = request.body;
+    const authKey = request.headers['x-auth-key'];
 
-server.get("/", async (request: FastifyRequest, reply: FastifyReply) => {
-    reply.send({ message: "Hello from the first server!" });
-});
-
-server.post("/connect", async (request: FastifyRequest, reply: FastifyReply) => {
-    const client_id = generateClientId();
-    const extendedReply = reply as ExtendedFastifyReply;
-    clientsAwaitingResponse.set(client_id, extendedReply);
-    console.log(Array.from(clientsAwaitingResponse.keys()));
-
-
-    extendedReply.res?.setHeader("Access-Control-Allow-Origin", "*");
-    extendedReply.res?.setHeader("Content-Type", "text/event-stream");
-    extendedReply.res?.setHeader("Cache-Control", "no-cache");
-    extendedReply.res?.setHeader("Connection", "keep-alive");
-    extendedReply.res?.flushHeaders();
-
-    reply.status(200).send({ client_id });
-});
-
-
-server.addHook("onClose", async (instance) => {
-    instance.server.on("close", () => {
-
-        let client_id: string | undefined;
-        for (const [key, value] of clientsAwaitingResponse.entries()) {
-            if (value.res === instance) {
-                client_id = key;
-                break;
-            }
-        }
-
-        if (client_id) {
-            clientsAwaitingResponse.delete(client_id);
-            console.log(`Client with ID ${client_id} disconnected and removed from the map.`);
-        }
-    });
-});
-
-
-server.get<{ Params: { client_id: string } }>("/connect/:client_id", async (request, reply) => {
-    const { client_id } = request.params;
-    console.log(request.params)
-
-    if (!clientsAwaitingResponse.has(client_id)) {
-        console.log(Array.from(clientsAwaitingResponse.keys()))
-        reply.code(404 ).send("Client not found");
+    // Проверяем, что ключ авторизации совпадает с секретным ключом
+    if (authKey !== SECRET_KEY) {
+        reply.status(401).send({ error: 'Unauthorized' });
         return;
     }
 
-
-    reply
-        .header("Access-Control-Allow-Origin", "*")
-        .header("Content-Type", "text/event-stream")
-        .header("Cache-Control", "no-cache")
-        .header("Connection", "keep-alive")
-        .status(200);
-
-    const clientResponse = clientsAwaitingResponse.get(client_id) as ExtendedFastifyReply;
-
-
-    const sendEvent = (event: string, data: any) => {
-        clientResponse.res?.write(`event: ${event}\n`);
-        clientResponse.res?.write(`data: ${JSON.stringify(data)}\n\n`);
-    };
-
-
-    sendEvent("message", { message: "Welcome!" });
-
-
-    let count = 1;
-    const interval = setInterval(() => {
-        sendEvent("count", { count });
-        count++;
-    }, 1000);
-
-
-    clientResponse.res?.on("close", () => {
-        clearInterval(interval);
-        reply.send("Connection closed");
-    });
+    if (typeof message === 'string') {
+        return { message };
+    }
+    reply.status(400).send({ error: 'Invalid contract' });
 });
 
-function generateClientId(): string {
+// Эндпоинт отправляющий контракт на сервер 2
+server1.get('/send-contract', async (_, reply) => {
+    try {
+        const contract: Contract = { message: 'Привет, Сервер 2!' };
+        const response = await axios.post('http://localhost:3001/contract', contract, {
+            headers: {
+                'Content-Type': 'application/json',
+                'X-Auth-Key': SECRET_KEY,
+            },
+        });
 
-    return Math.random().toString(36).substring(7);
-}
+        const data = response.data;
+        reply.send(data);
+    } catch (err) {
+        console.error(err);
+        reply.status(500).send({ error: 'Не удалось отправить контракт' });
+    }
+});
 
-server.listen(3001, (err) => {
+// Запускаем сервер
+server1.listen(3000, (err, address) => {
     if (err) {
         console.error(err);
         process.exit(1);
     }
-    console.log("First server is running on port 3001");
+    console.log(`Сервер 1 слушает ${address}`);
 });

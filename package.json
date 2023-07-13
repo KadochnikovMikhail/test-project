@@ -7,8 +7,8 @@
     "test": "echo \"Error: no test specified\" && exit 1",
     "lint": "npx eslint ",
     "build": "tsc -p tsconfig.json",
-    "start:server1": "cd first_server && tsc && node ../dist/first_server/src/index.js",
-    "start:server2": "cd second_server && tsc && node ../dist/second_server/src/index.js"
+    "start:server1": "cd first_server && tsc &&  node ../dist/first_server/src/index.js",
+    "start:server2": "cd second_server && tsc &&  node ../dist/second_server/src/index.js"
   },
   "keywords": [],
   "author": "",
@@ -32,7 +32,9 @@
   },
   "dependencies": {
     "axios": "^1.4.0",
+    "esm": "^3.2.25",
     "fastify": "^4.19.2",
+    "node-fetch": "^3.3.1",
     "uuid": "^9.0.0"
   }
 }
